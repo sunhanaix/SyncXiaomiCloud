@@ -7,12 +7,32 @@ import time
 import requests
 import random
 from urllib.parse import urlparse, parse_qsl
+from Chrome import get_cookie_by_url,get_cookies_from_chrome
 '''
 拿https://github.com/PiotrMachowski/Xiaomi-cloud-tokens-extractor这个项目大致改的一个小米云登录
 那个里面考虑的主要是IoT设备的登录
 本项目里面因为是模拟pc的浏览器登录，最后发现device_id信息得弄对了，似乎还得需要特定格式才行。
 用随机生成的那个不行，最后就只能写死了从浏览器cookie信息里面抄的device_id了
 '''
+
+def get_devid_fr_chrome(): #从chrome的cookie里面，获得自己的device id
+    res = get_cookies_from_chrome('%mi.com')
+    for c in res.split(";"):
+        if c.find('deviceId')>-1 and c.find('=')>-1:
+            devid,value=c.split('=')
+            return value
+    #前面在Chrome的cookie里面，没找到deviceId的话，直接返回自己的一个id
+    print("Warnning:没有从Chrome中找到deviceId信息，使用默认值，请注意！")
+    return 'wb_50894f5d-3bd8-4205-8322-c3f1361b9df3'
+
+def get_cookie_dict_fr_chrome(domain): #从chrome的cookie里面抓取所有cookie信息
+    res = get_cookies_from_chrome(domain)
+    cookie_dict={}
+    for c in res.split(";"):
+        if c.find('=')>-1 and len(c.split('='))>1:
+            name,value=c.split('=',maxsplit=1)
+            cookie_dict[name]=value
+    return cookie_dict
 
 class XiaomiCloudConnector:
 
@@ -21,7 +41,7 @@ class XiaomiCloudConnector:
         self._password = password
         self._agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.190 Safari/537.36'
         #self._device_id = self.generate_device_id()
-        self._device_id='wb_50894f5d-3bd8-4205-8322-c3f1361b9df3'
+        self._device_id=get_devid_fr_chrome()
         self._session = requests.session()
         self._sign = None
         self._ssecurity = None
@@ -130,6 +150,13 @@ class XiaomiCloudConnector:
             print("Invalid username.")
         return False
 
+    def cookie_login(self):
+        cookies=get_cookie_dict_fr_chrome('%mi.com')
+        #self._session.headers['Cookie'] = cookies
+        requests.utils.add_dict_to_cookiejar(self._session.cookies, cookies)
+        self._userId = cookies.get("userid")
+        self._serviceToken=cookies.get('apptoken')
+        return cookies and self._userId and self._serviceToken
 
     def signed_nonce(self, nonce):
         hash_object = hashlib.sha256(base64.b64decode(self._ssecurity) + base64.b64decode(nonce))
