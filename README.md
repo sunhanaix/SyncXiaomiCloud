@@ -6,6 +6,7 @@ please install requests and openpyxl pkg and use python3.7 +
 modify xiaomi.py's username and password,  
 put analysis_contact.py/analysis_sms.py/xiaomi_login.py/xiaomi.py to the same folder,  
 then execulate ./xiaomi.py  
+or use ./xiaomi_chrome.py
 
 # 描述
 给定小米的帐号、密码，登录小米云，  
@@ -18,4 +19,6 @@ pip install requests openpyxl。
 # 用法：
 修改xiaomi.py中的用户名和密码，  
 把analysis_contact.py/analysis_sms.py/xiaomi_login.py/xiaomi.py几个文件放在一个目录下。  
-执行./xiaomi.py进行下载自己帐号小米云上的资源  
+执行./xiaomi.py或者./xiaomi_chrome.py进行下载自己帐号小米云上的资源   
+如果使用Chrome方式，需要现在在Chrome浏览器上去登录小米网站i.mi.com，然后程序才能获得到chrome的有效cookie，从而进行下载
+
