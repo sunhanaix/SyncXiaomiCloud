@@ -152,10 +152,12 @@ class XiaomiCloudConnector:
 
     def cookie_login(self):
         cookies=get_cookie_dict_fr_chrome('%mi.com')
+        print("cookies=%s\n" % cookies)
         #self._session.headers['Cookie'] = cookies
         requests.utils.add_dict_to_cookiejar(self._session.cookies, cookies)
-        self._userId = cookies.get("userid")
-        self._serviceToken=cookies.get('apptoken')
+        self._userId = cookies.get("userId")
+        self._serviceToken=cookies.get('serviceToken')
+        print(f"userId={self._userId}\nserviceToken={self._serviceToken}\n")
         return cookies and self._userId and self._serviceToken
 
     def signed_nonce(self, nonce):

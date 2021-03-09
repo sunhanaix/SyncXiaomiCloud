@@ -482,6 +482,98 @@ class xiaomi(object):
         mylog("SMS info was written to %s" % fname)
         return fname
 
+    #获得便签信息，如果有照片，顺便下载便签
+    def get_notes(self, limit=400):
+        notes_dir=os.path.join(SYNC_DIR,'notes')
+        if not os.path.isdir(notes_dir):
+            os.mkdir(notes_dir)
+        mylog("trying to get notes info")
+        url='https://i.mi.com/note/full/page/?ts=%d&limit=%s' % (time.time()*1000,limit)
+        print(url)
+        r = self.s.get(url, verify=False,timeout=20)
+        if not r.status_code==200:
+            mylog("status_code<>200 ,can not get notes")
+            mylog(r.text)
+            return False
+        try:
+            result = r.json()
+        except Exception as e:
+            print(e)
+            mylog("can not get notes")
+            mylog(r.text)
+            return False
+        if not result['code'] == 0:
+            mylog("can not get notes")
+            mylog(r.text)
+            return False
+        self.notes=result.get('data')
+        if not self.notes:
+            return False
+        fname = os.path.join(notes_dir, 'notes.json')
+        open(fname, 'w', encoding='utf8').write(json.dumps(self.notes, indent=2, ensure_ascii=False))
+        mylog("Notes info was written to %s" % fname)
+        folder_dict={}
+        for folder in self.notes.get('folders'): #遍历存放分类目录的信息
+            subject=validateTitle(folder.get('subject'))
+            id=folder.get('id')
+            type=folder.get('type')
+            if not subject or not id or not type:
+                continue
+            tgt_folder=os.path.join(notes_dir,subject)
+            if not os.path.isdir(tgt_folder) and type=='folder':
+                os.mkdir(tgt_folder)
+                folder_dict[id]=tgt_folder
+        for item in self.notes.get('entries'): #遍历每条便签的信息
+            txt=item.get('snippet')
+            modifyDate=item.get('modifyDate')
+            modifyDate=time.strftime("%Y-%m-%d_%H%M%S", time.localtime(modifyDate/1000))
+            folderId=item.get('folderId')
+            folder=folder_dict.get(folderId)
+            if not folder: #要是没有标明便签是哪个目录下的，放默认目录下面
+                folder=notes_dir
+            setting=item.get('setting')
+            if not setting:
+                data=None
+            else:
+                data=setting.get('data')
+            if not data: #如果没有图片信息
+                fname=os.path.join(folder,modifyDate+'.txt')
+                open(fname,'w',encoding='utf8').write(txt)
+                continue
+            pics=[]
+            for d in data:
+                fileId=d.get('fileId')
+                picType=d.get('mimeType').split('/')[1]
+                sha1=d.get('digest')
+                if sha1 in self.sha1_info:
+                    pic_file=self.sha1_info[sha1] #把反斜杠替换成斜杠
+                    pic_file=os.path.abspath(pic_file)
+                else:
+                    fname="%s.%s" % (fileId,picType)
+                    fname=os.path.join(notes_dir,fname)
+                    url='https://i.mi.com/file/full?type=note_img&fileid=%s' % fileId
+                    mylog("下载便签图片：%s" % url)
+                    try:
+                        r=self.s.get(url,verify=False)
+                        open(fname,'wb').write(r.content)
+                        if not file_sha1(fname).lower()==sha1.lower():
+                            mylog("便签附带的图片下载失败")
+                    except Exception as e:
+                        mylog(e)
+                        mylog("便签附带的图片下载失败")
+                    pic_file=os.path.abspath(fname)
+                if not os.path.isfile(pic_file):
+                    mylog("为找到下载下来的便签图片，可能下载失败，请重试")
+                    continue
+                self.sha1_info[sha1]=pic_file
+                pic_file=pic_file.replace('\\', '/') #把反斜杠替换成斜杠
+                pics.append(pic_file)
+            fname = os.path.join(folder, modifyDate + '.html')
+            for pic in pics:
+                txt+='<img src="file://%s" width="600"><br>\n' % pic
+            open(fname, 'w', encoding='utf8').write(txt)
+        self.save_sha1_to_file()
+
 def main():
     #初始化
     print("1.使用Chrome已经登录的cookie信息 or 2.使用自己帐号密码登录？[2]",end='')
@@ -532,6 +624,8 @@ def main():
     #下载录音记录
     xm.record_list()
     xm.download_all_records()
+    #下载便签内容
+    xm.get_notes()
     #更新sha1记录信息
     xm.save_sha1_to_file()
     mylog("all sync down was done")
