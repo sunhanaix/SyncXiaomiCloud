@@ -138,7 +138,11 @@ class xiaomi(object):
                     name='截图'
                 elif album.get('albumId')=='1'or album.get('albumId')==1:
                     name='相机'
-            name=validateTitle(name)
+            try:
+                name=validateTitle(name)
+            except Exception as e:
+                mylog(e)
+                continue
             name=os.path.join(album_dir,name)
             album['folder']=name
             if not os.path.isdir(name):
