@@ -1,12 +1,12 @@
+import os,json,sys,glob
 import sqlite3
 import urllib3
-import os
-import json
 
 import sys
 import base64
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+import psutil
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -66,10 +66,11 @@ def get_cookies_from_chrome(domain=None, sql=None):  # 给定域名，返回这�
         sql = f'SELECT name, encrypted_value as value FROM cookies where host_key like "%{domain}%"'
     else:
         sql = sql
-    # print("sql=%s" % sql)
+    files=get_chrome_db_path()
+    cookie_db =files.get('cookie_file')
     if os.environ.get('debug'):
-        print("in get_cookies_from_chrome(),sql=%s" % sql)
-    cookie_db = os.path.join(os.environ['USERPROFILE'], r'AppData\Local\Google\Chrome\User Data\default\Cookies')
+        print("in get_cookies_from_chrome(),db=%s,sql=%s" % (cookie_db,sql))
+    
     dsn = 'file:' + cookie_db + '?mode=ro&nolock=1'
     #con = sqlite3.connect(filename)
     con=sqlite3.connect(dsn,uri=True)
@@ -87,8 +88,8 @@ def get_cookies_from_chrome(domain=None, sql=None):  # 给定域名，返回这�
 
 
 def get_url_from_chrome(url_query):  # 给定一个URL的SQL where条件查询语句，返回最后一条的url记录
-    data_path = os.path.join(os.environ['LOCALAPPDATA'], r"Google\Chrome\User Data\Default")
-    history_db = os.path.join(data_path, 'history')
+    files=get_chrome_db_path()
+    history_db = files.get('history_file')
     dsn = 'file:' + history_db + '?mode=ro&nolock=1'  # 设置只读方式打开，无锁方式，Chrome启动时会锁住History库，所以得nolock
     # print(dsn)
     con = sqlite3.connect(dsn, uri=True)
@@ -136,6 +137,49 @@ def get_cookie_by_url(url):
         return None
     return res
 
+def get_profile_dir(): #通过后台进程，找到chrome.exe的进程，查看它带的--profile-directory=xx的参数，找到chrome的profile目录
+    for process in psutil.process_iter():
+        try:
+            cmdline = process.cmdline()
+            # cmdline类似如下数据：cmdline=['C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', '--profile-directory=Profile 1', '--restart']
+            if len(cmdline)<2: #cmd至少要带个参数才行
+                continue
+            cmd=os.path.basename(cmdline[0])
+            #print(f"{cmdline=}")
+            if 'chrome.exe' in cmd.lower():
+                # 获取chrome进程的所有命令行参数
+                #print(f"{cmdline=}")
+                #查找cmdline数组元素中，含有--profile-directory的数据元素
+                profile_cmdline=[x for x in cmdline if '--profile-directory' in x]
+                #print(f"{profile_cmdline=}")
+                #如果找到了，数据长度>0，然后返回等号=后部分的内容
+                if len(profile_cmdline)>0:
+                    #print(f"{profile_cmdline=}")
+                    return profile_cmdline[0].split('=')[1]
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            pass
+
+def search_file_in_path(fname,path):#在一个path下面遍历所有子目录，返回找到的第一个文件绝对路径
+    search_path=os.path.join(path,'**')
+    search_files = glob.glob(os.path.join(search_path, fname), recursive=True)
+    # 遍历所有找到的文件，输出其所在的路径
+    for search_file in search_files:
+        file_path = os.path.abspath(search_file)
+        return file_path
+
+def get_chrome_db_path(): #通过去profile目录里面去找cookie和history文件，返回找到的绝对路径
+    # 指定要查找的文件名
+    file_name = 'cookies'
+    data_path = os.path.join(os.environ['LOCALAPPDATA'], r"Google\Chrome\User Data")
+    pdir=get_profile_dir()
+    if pdir:
+        profile_path=os.path.join(data_path,pdir)
+    else:
+        profile_path = os.path.join(data_path, 'Default')
+    # 使用 glob.glob 函数遍历当前目录及其子目录中所有符合条件的文件
+    cookie_file=search_file_in_path('cookies',profile_path)
+    history_file = search_file_in_path('history', profile_path)
+    return {'cookie_file':cookie_file,'history_file':history_file}
 
 if __name__ == '__main__':
     # domain = 'exmail.qq.com'  # 目标网站域名
