@@ -19,7 +19,7 @@ pip install requests openpyxl
 '''
 
 #存放同步数据的地方
-SYNC_DIR='/a/Share/XiaoMi'
+SYNC_DIR='XiaoMi'
 
 #计算sha1的hash值的时候，哪些扩展名的文件要进行计算
 #这里全部用小写，后面比对的时候，也强制小写比较
@@ -205,12 +205,25 @@ class xiaomi(object):
         real_url=result['url']
         print(real_url)
         meta=result['meta']
-        r=self.s.post(real_url,data={'meta':meta},verify=False,timeout=3600)
-        if not r.status_code==200:
-            mylog("phase3 ,downloading pic,folder=%s,pic_id=%s failed, status_code<>200" % (folder, pic_id))
-            mylog(r.text)
-            return False
-        open(fname,'wb').write(r.content)
+        try:
+            block_size = 1024 * 1024  
+            r=self.s.post(real_url,data={'meta':meta},verify=False,timeout=3600,stream=True)
+            if not r.status_code==200:
+                mylog("phase3 ,downloading pic,folder=%s,pic_id=%s failed, status_code<>200" % (folder, pic_id))
+                mylog(r.text)
+                return False
+            total_size = int(r.headers.get('content-length', 0)) 
+            print(f"Total size: {total_size/1024/1024:.2f} MB")  
+            downloaded_size = 0 
+            with open(fname, 'wb') as f:
+                while downloaded_size < total_size:
+                    data = r.raw.read(block_size) 
+                    f.write(data)
+                    downloaded_size += block_size
+        except Exception as e:
+            mylog(f"ERROR: in phase3 ,downloading pic,folder={folder},pic_id={pic_id} failed, reson: {e}")
+            return None
+        #open(fname,'wb').write(r.content) 这个容易导致内存不足
         return file_sha1(fname)
     
     #给定一个dict格式的相册信息，对整个相册进行下载
@@ -479,7 +492,11 @@ class xiaomi(object):
 
 def main():
     #初始化
-    xm = xiaomi(username='13912341234',password='123456',do_sha1_first=False)
+    print("请输入小米官网帐号:",end="")
+    username=input()
+    print("请输入小米官网密码:",end="")
+    password=input()
+    xm = xiaomi(username=username,password=password,do_sha1_first=False)
     if not xm.logged:
         sys.exit(-1)
     #开始遍历相册，获得相册列表
