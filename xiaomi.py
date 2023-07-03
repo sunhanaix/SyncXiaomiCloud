@@ -47,9 +47,16 @@ def validateTitle(title):
     new_title = re.sub(rstr, "_", title)  # 替换为下划线
     return new_title
 
-def file_sha1(fname):
-    content=open(fname,'rb').read()
-    h=hashlib.sha1(content)
+def file_sha1(fname): #考虑到树莓派的小内存，需要对文件分片进行sha1计算，避免把内存OOM
+    file_piece_size=1024*8
+    h=hashlib.sha1(b'')
+    f=open(fname,'rb')
+    buf=f.read(file_piece_size)
+    h.update(buf)
+    while len(buf)!=0:
+        buf=f.read(file_piece_size)
+        h.update(buf)
+    f.close()
     return h.hexdigest().lower()
 
 def get_all_files(start_path,CHECK_EXT,fname,do_real=False): #获得所有指定目录下的需要的文件
@@ -70,7 +77,11 @@ def get_all_files(start_path,CHECK_EXT,fname,do_real=False): #获得所有指定
         for fname in files:
             if os.path.splitext(fname)[1].lower() in CHECK_EXT:
                 abs_path=os.path.join(root,fname)
-                sha1=file_sha1(abs_path)
+                try:
+                    sha1=file_sha1(abs_path)
+                except Exception as e:
+                    mylog(f"caculate sha1 for file:{abs_path} failed! reason:{e}")
+                    continue
                 if sha1 in res:
                     res[sha1].append(abs_path)
                 else:
