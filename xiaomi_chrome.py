@@ -149,11 +149,11 @@ class xiaomi(object):
                     name='截图'
                 elif album.get('albumId')=='1'or album.get('albumId')==1:
                     name='相机'
-            try:
-                name=validateTitle(name)
-            except Exception as e:
-                mylog(e)
-                continue
+                elif album.get('albumId')=='1000':
+                    name='private'
+                else: 
+                    mylog(f"not name,{name=},{album=}")
+            name=validateTitle(name)
             name=os.path.join(album_dir,name)
             album['folder']=name
             if not os.path.isdir(name):
@@ -260,7 +260,14 @@ class xiaomi(object):
             pic_name=os.path.join(folder,pic_name)
             mylog("trying to download %s" % pic_name)
             if sha1 in self.sha1_info:
-                mylog("%s already in local:%s" % (pic_name,self.sha1_info[sha1]))
+                if os.path.isfile(pic_name):
+                    mylog("%s already in local dir : %s , will not download it" % (pic_name,folder))
+                else:
+                    mylog("%s already in local:%s, but not in local dir:%s,trying to link it locally" % (pic_name,self.sha1_info[sha1],folder))
+                    try:
+                        os.link(self.sha1_info[sha1][0],pic_name)
+                    except Exception as e:
+                        mylog(f"make hard link failed from {self.sha1_info[sha1][0]} to {pic_name},reason:{e}")
                 continue
             sha1_written=self.download_one_pic(folder=folder, pic_id=id,fname=pic_name)
             if not sha1_written: #download_one_pic失败的话，很可能是session过期了，需要重新login下
@@ -279,6 +286,7 @@ class xiaomi(object):
                 mylog(f"updated {self.update_cnt} records in this time")
                 mylog(f"do save_sha1_to_file:{self.sha1_file}")
                 self.save_sha1_to_file()
+                
 
     def get_album_info(self): #根据前面获得的总的相册信息（self.albums），把每个子相册的详细内容获得，并扔到self.albums_details数组中
         self.albums_details=[]
