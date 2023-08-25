@@ -4,10 +4,16 @@ from requests.packages.urllib3.exceptions import InsecureRequestWarning
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 import hashlib
 import http.cookiejar as cookielib
+import datetime
+import subprocess
+from PIL import Image
+from PIL.ExifTags import TAGS
 from urllib.parse import urlparse, parse_qsl
 from analysis_contact import convert_contact_to_xls
 from analysis_sms import convert_sms_to_xls
 from xiaomi_login import XiaomiCloudConnector
+import shutil
+import config as cfg
 '''
 给定小米的帐号、密码，登录小米云，
 下载相册照片、视频、通讯录、短信、录音等信息到本地
@@ -19,7 +25,7 @@ pip install requests openpyxl
 '''
 
 #存放同步数据的地方
-SYNC_DIR='XiaoMi'
+SYNC_DIR=cfg.SYNC_DIR
 
 #计算sha1的hash值的时候，哪些扩展名的文件要进行计算
 #这里全部用小写，后面比对的时候，也强制小写比较
@@ -44,8 +50,59 @@ def mylog(ss, log=os.path.join(app_path, logname)):
 def validateTitle(title):
     # title=changeChineseNumToArab(title)
     rstr = r'[\/\\\:\*\?\"\<\>\|]'  # 把不能做文件名的字符处理下
-    new_title = re.sub(rstr, "_", title)  # 替换为下划线
+    new_title=title
+    try:
+        new_title = re.sub(rstr, "_", title)  # 替换为下划线
+    except Exception as e:
+        print(title)
+        mylog(f"error:{title=},failed to convert,reason:{e}")
     return new_title
+
+SUPPORTED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.mov', '.mp4']
+
+def get_photo_datetime(filename): #通过照片的exif信息，获得照片的拍照时间
+    try:
+        with Image.open(filename) as img:
+            exif_data = img._getexif()
+            if exif_data:
+                for tag, value in exif_data.items():
+                    if TAGS.get(tag) == 'DateTimeOriginal':
+                        return datetime.datetime.strptime(value, "%Y:%m:%d %H:%M:%S")
+        return None
+    except Exception:
+        return None
+
+def get_video_datetime(filename): #通过ffprobe获得视频meta信息，获得拍摄时间
+    try:
+        result = subprocess.run(["ffprobe", "-v", "quiet", "-show_entries", "format_tags=creation_time", "-of", "default=noprint_wrappers=1:nokey=1", filename], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if result.returncode == 0:
+            creation_time_str = result.stdout.strip()
+            return datetime.datetime.strptime(creation_time_str, "%Y-%m-%dT%H:%M:%S.%fZ")
+        return None
+    except Exception:
+        return None
+
+def get_media_datetime(filename): #给定文件名，通过照片或者视频的exif/meta信息，获得拍摄时间戳
+    file_extension = os.path.splitext(filename)[1].lower()
+    datetime_from_meta=None
+    if file_extension in ('.jpg', '.jpeg', '.png', '.gif'):
+        datetime_from_meta = get_photo_datetime(filename)
+    elif file_extension in ('.mov', '.mp4'):
+        datetime_from_meta = get_video_datetime(filename)
+    return datetime_from_meta
+
+def modify_file_timestamp(filename, timestamp): #给定文件名和时间戳，给相关文件修改时间
+    if 'debug' in os.environ:
+        print(f"{filename=},{timestamp=}")
+    try:
+        os.utime(filename, (timestamp.timestamp(), timestamp.timestamp()))
+    except Exception as e:
+        print(f"Error modifying timestamp for {filename}: {e}")
+
+def file_sha1_old(fname): #这个如果文件较大的话，对于树莓派容易内存溢出
+    content=open(fname,'rb').read()
+    h=hashlib.sha1(content)
+    return h.hexdigest().lower()
 
 def file_sha1(fname): #考虑到树莓派的小内存，需要对文件分片进行sha1计算，避免把内存OOM
     file_piece_size=1024*8
@@ -58,7 +115,7 @@ def file_sha1(fname): #考虑到树莓派的小内存，需要对文件分片进
         h.update(buf)
     f.close()
     return h.hexdigest().lower()
-
+    
 def get_all_files(start_path,CHECK_EXT,fname,do_real=False): #获得所有指定目录下的需要的文件
     mylog("trying to caculate the sha1 hash info from %s" % start_path)
     sha1_json_file=fname
@@ -239,6 +296,9 @@ class xiaomi(object):
             mylog(f"ERROR: in phase3 ,downloading pic,folder={folder},pic_id={pic_id} failed, reson: {e}")
             return None
         #open(fname,'wb').write(r.content) 这个容易导致内存不足
+        datetime_from_meta = get_media_datetime(fname)
+        if datetime_from_meta:
+            modify_file_timestamp(fname, datetime_from_meta)
         return file_sha1(fname)
     
     #给定一个dict格式的相册信息，对整个相册进行下载
@@ -262,6 +322,9 @@ class xiaomi(object):
                     try:
                         os.link(self.sha1_info[sha1][0],pic_name)
                     except Exception as e:
+                        if e.winerror == 1:
+                            mylog(f"{e},make hard link failed from {self.sha1_info[sha1][0]} to {pic_name}, was not supported! will try to copy")
+                            shutil.copy(self.sha1_info[sha1][0], pic_name)
                         mylog(f"make hard link failed from {self.sha1_info[sha1][0]} to {pic_name},reason:{e}")
                 continue
             sha1_written=self.download_one_pic(folder=folder, pic_id=id,fname=pic_name)
@@ -514,22 +577,23 @@ class xiaomi(object):
 
 def main():
     #初始化
-    print("请输入小米官网帐号:",end="")
-    username=input()
-    print("请输入小米官网密码:",end="")
-    password=input()
-    xm = xiaomi(username=username,password=password,do_sha1_first=False)
+    mylog("trying to login Xiaomi Account")
+    xm = xiaomi(username=cfg.username,password=cfg.password,do_sha1_first=cfg.do_sha1_first)
     if not xm.logged:
         sys.exit(-1)
     #开始遍历相册，获得相册列表
+    mylog("trying to get album list")
     xm.album_list() #相册信息存放到了xm.albums里面
     #获得每一个相册的具体信息
+    mylog("trying to get every album info")
     xm.get_album_info()
     #遍历相册，逐个下载相册（如果图片或者视频的sha1在和本地文件的相同，那么就跳过）
     for one_album in xm.albums_details:
+        mylog(f"trying to download {one_album['folder']} pics or videoes")
         xm.download_album(one_album['folder'],one_album['album'])
     mylog("album was downloaded OK!")
     #下载通讯录
+    mylog("trying to download contracts")
     contacts_file=xm.get_contacts()
     contact_tgt=os.path.join(SYNC_DIR,'contacts.xlsx')
     phone_dict_file=convert_contact_to_xls(src=contacts_file,tgt=contact_tgt)
@@ -538,6 +602,7 @@ def main():
     else:
         mylog("dealing contacts with error!")
     #下载短信记录
+    mylog("trying to download SMS details")
     sms_file=xm.get_sms()
     sms_tgt=os.path.join(SYNC_DIR,'sms.xlsx')
     sms_info=convert_sms_to_xls(src=sms_file,tgt=sms_tgt,contact=phone_dict_file)
@@ -546,9 +611,12 @@ def main():
     else:
         mylog("dealing sms with error!")
     #下载录音记录
+    mylog("trying to get all record audio list")
     xm.record_list()
+    mylog("trying to download recoder mp3")
     xm.download_all_records()
     #更新sha1记录信息
+    mylog("trying to update sha1 json file")
     xm.save_sha1_to_file()
     mylog("all sync down was done")
 
