@@ -229,7 +229,31 @@ class xiaomi(object):
                 return results
             i+=1
         return results
-    
+
+    # 给定一个照片/视频的id信息，把它删除
+    def del_one_media(self, id):
+        url='https://i.mi.com/gallery/info/delete'
+        mylog(f"trying to delete {id=} media")
+        data={'id':id,
+              'serviceToken':self.s.cookies.get('serviceToken')
+              }
+        r=self.s.post(url,verify=False,timeout=10,data=data)
+        if not r.status_code==200:
+            mylog(f"ERROR: del_one_media  ,{id=} failed, status_code<>200" )
+            mylog(r.text)
+            return False
+        result={}
+        try:
+            result=r.json()
+        except Exception as e:
+            mylog(f"ERROR: del_one_media  ,{id=} failed, can not decode response json data ,reason:{e}")
+            mylog(r.text)
+            return False
+        if not result['code']==0:
+            mylog(f"ERROR: del_one_media  ,{id=} failed, result['code'] is not 0")
+            mylog(r.text)
+            return False
+
     #给定一个照片/视频的id信息，以及存放到的目录和文件名，把它下载到对应地方
     def download_one_pic(self,folder,pic_id,fname):
         ts = int(time.time() * 1000)
@@ -299,6 +323,8 @@ class xiaomi(object):
         datetime_from_meta = get_media_datetime(fname)
         if datetime_from_meta:
             modify_file_timestamp(fname, datetime_from_meta)
+        if cfg.down_and_del: #要是设置了下载后就删除云端的参数，执行删除操作
+            self.del_one_media(pic_id)
         return file_sha1(fname)
     
     #给定一个dict格式的相册信息，对整个相册进行下载
@@ -579,6 +605,7 @@ def main():
     #初始化
     mylog("trying to login Xiaomi Account")
     xm = xiaomi(username=cfg.username,password=cfg.password,do_sha1_first=cfg.do_sha1_first)
+    print(xm)
     if not xm.logged:
         sys.exit(-1)
     #开始遍历相册，获得相册列表
