@@ -18,6 +18,10 @@ pip install requests openpyxl ……
 小米云上面记录了每个文件的sha1信息，这样就可以比对本地文件的sha1值是否一样，如果一样的话，就不用下载了，实现断点续传功能。  
 # 用法： 
 由于对新登入设备访问小米云相册等敏感资源的安全限制，需要手工登录小米云相册，获得device_id信息（比如用fiddler抓包），填入config.py  
+这里以Chrome浏览器方式为例，首先在Chrome浏览器中正确登录小米云，然后在浏览器地址栏中输入地址：
+https://account.xiaomi.com ，然后按F12键，调出开发工具，点击开发工具中的左侧Cookies，选择account.xiaomi.com，然后就可以看到deviceId了。
+这里要注意的是，当前网站一定是account.xiaomi.com，而不是i.mi.com，因为不同网站，不同的cookie，就没deviceId信息了。
+![image](https://github.com/sunhanaix/SyncXiaomiCloud/blob/main/use_Chrome_find_deviceId.jpg?raw=true)
 修改config.py中的用户名和密码和存放同步小米云上的数据目录 
 把analysis_contact.py/analysis_sms.py/xiaomi_login.py/xiaomi.py几个文件放在一个目录下。  
 执行./xiaomi.py  
