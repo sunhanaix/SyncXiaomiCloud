@@ -36,3 +36,19 @@ https://account.xiaomi.com ，然后按F12键，调出开发工具，点击开�
 老版本chrome用户想就像用这个脚本的，或者自己执行chrome.exe --disable-features=LockProfileCookieDatabase
 来降低安全性来启动chrome的，  
 非要使用xiaomi_chrome.py的，请自行对比xiaomi.py的变动内容对xiaomi_chrome.py进行修改.  
+
+## 捐赠
+
+您的捐赠将鼓励我继续完善SyncXiaomiCloud。
+
+* 对于个人用户，可以使用支付宝或者微信进行捐赠。
+
+ 
+| 支付宝 | 微信支付 |
+| ------ | --------- |
+| <img src="https://www.sunbeatus.com/alipay.jpg" height="248px" width="164px" title="支付宝" style="display:inherit;"/> | <img src="https://www.sunbeatus.com/wechatpay.jpg" height="248px" width="164px" title="微信支付" style="display:inherit;"/> |
+
+使用 QQ 扫码加入：
+* QQ 群：765883686（为控制人数和人员质量，需付费10元入群。微信或支付宝支付后，申请入群时贴上转账单号即可。
+
+![](https://www.sunbeatus.com/xiaomi_cloud_qq_group.jpg)
