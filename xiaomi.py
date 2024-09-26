@@ -348,10 +348,11 @@ class xiaomi(object):
                     try:
                         os.link(self.sha1_info[sha1][0],pic_name)
                     except Exception as e:
-                        if e.winerror == 1:
-                            mylog(f"{e},make hard link failed from {self.sha1_info[sha1][0]} to {pic_name}, was not supported! will try to copy")
-                            shutil.copy(self.sha1_info[sha1][0], pic_name)
                         mylog(f"make hard link failed from {self.sha1_info[sha1][0]} to {pic_name},reason:{e}")
+                        if os.path.isfile(self.sha1_info[sha1][0]):
+                            shutil.copy(self.sha1_info[sha1][0], pic_name)
+                        else:
+                            mylog(f"{self.sha1_info[sha1][0]} was gone, maybe deleted,will ignore")
                 continue
             sha1_written=self.download_one_pic(folder=folder, pic_id=id,fname=pic_name)
             if not sha1_written: #download_one_pic失败的话，很可能是session过期了，需要重新login下
