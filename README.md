@@ -9,15 +9,15 @@ then execulate ./xiaomi.py  (suggest)
 or use ./xiaomi_chrome.py (discard method)
 
 # 新增docker部署方式
-目前做了arm64和x64的两个image，
-可以docker pull sunbeat/sync_xiaomi:x64
-或者docker pull sunbeat/sync_xiaomi:arm64
-进行介质拉取。
-然后docker run -v /xx/config.py:/app/config.py   \
--v /xx/docker_xiaomi:/app/xiaomi \
-sunbeat/sync_xiaomi:x64
-其中/xx/config.py里面修改成你的配置文件
-/xx/docker_xiaomi修改成你要存放数据的目录
+目前做了arm64和x64的两个image，  
+可以docker pull sunbeat/sync_xiaomi:x64  
+或者docker pull sunbeat/sync_xiaomi:arm64  
+进行介质拉取。  
+然后docker run -v /xx/config.py:/app/config.py   \  
+-v /xx/docker_xiaomi:/app/xiaomi \  
+sunbeat/sync_xiaomi:x64  
+其中/xx/config.py里面修改成你的配置文件  
+/xx/docker_xiaomi修改成你要存放数据的目录  
 
 # 描述
 给定小米的帐号、密码，登录小米云，  
